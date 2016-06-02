@@ -588,6 +588,7 @@ class PGCli(object):
         c = self.config
         settings = {'casing_file': get_casing_file(c),
           'generate_casing_file': c['main'].as_bool('generate_casing_file'),
+          'generate_aliases': c['main'].as_bool('generate_aliases'),
           'asterisk_column_order': c['main']['asterisk_column_order']}
         self.completion_refresher.refresh(self.pgexecute, self.pgspecial,
             callback, history=history, settings=settings)

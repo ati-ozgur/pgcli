@@ -1,5 +1,6 @@
 from pgcli.packages.sqlcompletion import (
     suggest_type, Special, Database, Schema, Table, Column, View, Keyword,
+    AliasableTable, AliasableView, AliasableFunction,
     Function, Datatype, Alias, JoinCondition, Join)
 import pytest
 
@@ -25,7 +26,7 @@ def test_select_suggests_cols_with_qualified_table_scope():
 @pytest.mark.parametrize('expression', [
     'SELECT * FROM "tabl" WHERE ',
 ])
-def test_where_suggests_columns_functions_quoted_table(expression):
+def Aliasabletest_where_suggests_columns_functions_quoted_table(expression):
     suggestions = suggest_type(expression, expression)
     assert set(suggestions) == set([
         Column(tables=((None, 'tabl', '"tabl"', False),)),
@@ -114,9 +115,9 @@ def test_suggests_tables_views_and_schemas(expression):
 def test_suggest_tables_views_schemas_and_functions(expression):
     suggestions = suggest_type(expression, expression)
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Schema()
     ])
 
@@ -127,10 +128,11 @@ def test_suggest_tables_views_schemas_and_functions(expression):
 ])
 def test_suggest_after_join_with_two_tables(expression):
     suggestions = suggest_type(expression, expression)
+    tbls = tuple([(None, 'foo', None, False), (None, 'bar', None, False)])
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None, tables=tbls),
+        AliasableView(schema=None, tables=tbls),
+        AliasableFunction(schema=None, filter='for_from_clause', tables=tbls),
         Join(((None, 'foo', None, False), (None, 'bar', None, False)), None),
         Schema(),
     ])
@@ -140,12 +142,12 @@ def test_suggest_after_join_with_two_tables(expression):
     'SELECT * FROM foo JOIN ',
     'SELECT * FROM foo JOIN bar'
 ])
-def test_suggest_after_join_with_one_table(expression):
+def Aliasabletest_suggest_after_join_with_one_table(expression):
     suggestions = suggest_type(expression, expression)
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Join(((None, 'foo', None, False),), None),
         Schema(),
     ])
@@ -154,10 +156,20 @@ def test_suggest_after_join_with_one_table(expression):
 @pytest.mark.parametrize('expression', [
     'INSERT INTO sch.',
     'COPY sch.',
-    'UPDATE sch.',
     'DESCRIBE sch.',
 ])
 def test_suggest_qualified_tables_and_views(expression):
+    suggestions = suggest_type(expression, expression)
+    assert set(suggestions) == set([
+        Table(schema='sch'),
+        View(schema='sch'),
+    ])
+
+
+@pytest.mark.parametrize('expression', [
+    'UPDATE sch.',
+])
+def test_suggest_qualified_aliasable_tables_and_views(expression):
     suggestions = suggest_type(expression, expression)
     assert set(suggestions) == set([
         Table(schema='sch'),
@@ -175,9 +187,9 @@ def test_suggest_qualified_tables_and_views(expression):
 def test_suggest_qualified_tables_views_and_functions(expression):
     suggestions = suggest_type(expression, expression)
     assert set(suggestions) == set([
-        Table(schema='sch'),
-        View(schema='sch'),
-        Function(schema='sch', filter='for_from_clause'),
+        AliasableTable(schema='sch'),
+        AliasableView(schema='sch'),
+        AliasableFunction(schema='sch', filter='for_from_clause'),
     ])
 
 
@@ -186,10 +198,11 @@ def test_suggest_qualified_tables_views_and_functions(expression):
 ])
 def test_suggest_qualified_tables_views_functions_and_joins(expression):
     suggestions = suggest_type(expression, expression)
+    tbls = tuple([(None, 'foo', None, False)])
     assert set(suggestions) == set([
-        Table(schema='sch'),
-        View(schema='sch'),
-        Function(schema='sch', filter='for_from_clause'),
+        AliasableTable(schema='sch', tables=tbls),
+        AliasableView(schema='sch', tables=tbls),
+        AliasableFunction(schema='sch', filter='for_from_clause', tables=tbls),
         Join(((None, 'foo', None, False),), 'sch'),
     ])
 
@@ -225,9 +238,9 @@ def test_table_comma_suggests_tables_and_schemas():
     suggestions = suggest_type('SELECT a, b FROM tbl1, ',
             'SELECT a, b FROM tbl1, ')
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Schema(),
     ])
 
@@ -308,7 +321,7 @@ def test_dot_suggests_cols_of_an_alias_where(sql):
     ])
 
 
-def test_dot_col_comma_suggests_cols_or_schema_qualified_table():
+def Aliasabletest_dot_col_comma_suggests_cols_or_schema_qualified_table():
     suggestions = suggest_type('SELECT t1.a, t2. FROM tabl1 t1, tabl2 t2',
             'SELECT t1.a, t2.')
     assert set(suggestions) == set([
@@ -352,15 +365,28 @@ def test_outer_table_reference_in_exists_subquery_suggests_columns():
 
 @pytest.mark.parametrize('expression', [
     'SELECT * FROM (SELECT * FROM ',
-    'SELECT * FROM foo WHERE EXISTS (SELECT * FROM ',
-    'SELECT * FROM foo WHERE bar AND NOT EXISTS (SELECT * FROM ',
 ])
 def test_sub_select_table_name_completion(expression):
     suggestion = suggest_type(expression, expression)
     assert set(suggestion) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
+        Schema(),
+    ])
+
+
+@pytest.mark.parametrize('expression', [
+    'SELECT * FROM foo WHERE EXISTS (SELECT * FROM ',
+    'SELECT * FROM foo WHERE bar AND NOT EXISTS (SELECT * FROM ',
+])
+def test_sub_select_table_name_completion_with_outer_table(expression):
+    suggestion = suggest_type(expression, expression)
+    tbls = tuple([(None, 'foo', None, False)])
+    assert set(suggestion) == set([
+        AliasableTable(schema=None, tables=tbls),
+        AliasableView(schema=None, tables=tbls),
+        AliasableFunction(schema=None, filter='for_from_clause', tables=tbls),
         Schema(),
     ])
 
@@ -381,7 +407,7 @@ def test_sub_select_multiple_col_name_completion():
             'SELECT * FROM (SELECT a, ')
     assert set(suggestions) == set([
         Column(tables=((None, 'abc', None, False),)),
-        Function(schema=None),
+        AliasableFunction(schema=None),
         Keyword(),
     ])
 
@@ -402,22 +428,26 @@ def test_sub_select_dot_col_name_completion():
 def test_join_suggests_tables_and_schemas(tbl_alias, join_type):
     text = 'SELECT * FROM abc {0} {1} JOIN '.format(tbl_alias, join_type)
     suggestion = suggest_type(text, text)
+    tbls = tuple([(None, 'abc', tbl_alias or None, False)])
     assert set(suggestion) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None, tables=tbls),
+        AliasableView(schema=None, tables=tbls),
+        AliasableFunction(schema=None, filter='for_from_clause', tables=tbls),
         Schema(),
-        Join(((None, 'abc', tbl_alias if tbl_alias else None, False),), None),
+        Join(((None, 'abc', tbl_alias or None, False),), None),
     ])
 
 
 def test_left_join_with_comma():
     text = 'select * from foo f left join bar b,'
     suggestions = suggest_type(text, text)
+    # tbls should also include (None, 'bar', 'b', False)
+    # but there's a bug with commas
+    tbls = tuple([(None, 'foo', 'f', False)])
     assert set(suggestions) == set([
-         Table(schema=None),
-         View(schema=None),
-         Function(schema=None, filter='for_from_clause'),
+         AliasableTable(schema=None, tables=tbls),
+         AliasableView(schema=None, tables=tbls),
+         AliasableFunction(None, 'for_from_clause', tbls),
          Schema(),
     ])
 
@@ -534,9 +564,9 @@ def test_2_statements_2nd_current():
     suggestions = suggest_type('select * from a; select * from ',
                                'select * from a; select * from ')
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Schema(),
     ])
 
@@ -552,9 +582,9 @@ def test_2_statements_2nd_current():
     suggestions = suggest_type('select * from; select * from ',
                                'select * from; select * from ')
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Schema(),
     ])
 
@@ -563,9 +593,9 @@ def test_2_statements_1st_current():
     suggestions = suggest_type('select * from ; select * from b',
                                'select * from ')
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Schema(),
     ])
 
@@ -582,9 +612,9 @@ def test_3_statements_2nd_current():
     suggestions = suggest_type('select * from a; select * from ; select * from c',
                                'select * from a; select * from ')
     assert set(suggestions) == set([
-        Table(schema=None),
-        View(schema=None),
-        Function(schema=None, filter='for_from_clause'),
+        AliasableTable(schema=None),
+        AliasableView(schema=None),
+        AliasableFunction(schema=None, filter='for_from_clause'),
         Schema(),
     ])
 
@@ -735,7 +765,7 @@ def test_named_query_completion(text, before, expected):
     assert set(expected) == set(suggestions)
 
 
-def test_select_suggests_fields_from_function():
+def Aliasabletest_select_suggests_fields_from_function():
     suggestions = suggest_type('SELECT  FROM func()', 'SELECT ')
     assert set(suggestions) == set([
             Column(tables=((None, 'func', None, True),)),
@@ -750,7 +780,7 @@ def test_select_suggests_fields_from_function():
 ])
 def test_ignore_leading_double_quotes(sql):
     suggestions = suggest_type(sql, sql)
-    assert Table(schema=None) in set(suggestions)
+    assert AliasableTable(schema=None) in set(suggestions)
 
 
 @pytest.mark.parametrize('sql', [

@@ -20,20 +20,27 @@ else:
 Special = namedtuple('Special', [])
 Database = namedtuple('Database', [])
 Schema = namedtuple('Schema', [])
+# AliasableTable is used in those cases we might want to generate an alias
+AliasableTable = namedtuple('AliasableTable', 'schema tables')
 Table = namedtuple('Table', ['schema'])
+AliasableView = namedtuple('AliasableView', 'schema tables')
+View = namedtuple('View', ['schema'])
 # JoinConditions are suggested after ON, e.g. 'foo.barid = bar.barid'
 JoinCondition = namedtuple('JoinCondition', ['tables', 'parent'])
 # Joins are suggested after JOIN, e.g. 'foo ON foo.barid = bar.barid'
 Join = namedtuple('Join', ['tables', 'schema'])
 
+AliasableFunction = namedtuple('AliasableFunction', 'schema filter tables')
 Function = namedtuple('Function', ['schema', 'filter'])
 # For convenience, don't require the `filter` argument in Function constructor
 Function.__new__.__defaults__ = (None, None)
+AliasableFunction.__new__.__defaults__ = (None, None, tuple())
+AliasableTable.__new__.__defaults__ = (None, tuple())
+AliasableView.__new__.__defaults__ = (None, tuple())
 
 Column = namedtuple('Column', ['tables', 'require_last_table'])
 Column.__new__.__defaults__ = (None, None)
 
-View = namedtuple('View', ['schema'])
 Keyword = namedtuple('Keyword', [])
 NamedQuery = namedtuple('NamedQuery', [])
 Datatype = namedtuple('Datatype', ['schema'])
@@ -295,28 +302,30 @@ def suggest_based_on_last_token(token, text_before_cursor, full_text,
             ('copy', 'from', 'update', 'into', 'describe', 'truncate')):
 
         schema = (identifier and identifier.get_parent_name()) or None
+        tables = extract_tables(text_before_cursor)
+        is_join = token_v.endswith('join') and token.is_keyword
         # If schema name is unquoted, lower-case it
         if schema and identifier.value[0] != '"':
             schema = schema.lower()
         # Suggest tables from either the currently-selected schema or the
         # public schema if no schema has been specified
-        suggest = [Table(schema=schema)]
+        suggest = []
 
         if not schema:
             # Suggest schemas
             suggest.insert(0, Schema())
 
-        # Only tables can be TRUNCATED, otherwise suggest views
-        if token_v != 'truncate':
-            suggest.append(View(schema=schema))
-
         # Suggest set-returning functions in the FROM clause
-        if token_v == 'from' or (token_v.endswith('join') and token.is_keyword):
-            suggest.append(Function(schema=schema, filter='for_from_clause'))
+        if token_v == 'from' or is_join:
+            suggest.extend((AliasableTable(schema=schema, tables=tables),
+                AliasableFunction(schema, 'for_from_clause', tables),
+                AliasableView(schema=schema, tables=tables)))
+        elif token_v == 'truncate':
+            suggest.append(Table(schema))
+        else:
+            suggest.extend((Table(schema), View(schema)))
 
-        if (token_v.endswith('join') and token.is_keyword
-          and _allow_join(parsed_statement)):
-            tables = extract_tables(text_before_cursor)
+        if is_join and _allow_join(parsed_statement):
             suggest.append(Join(tables=tables, schema=schema))
 
         return tuple(suggest)
